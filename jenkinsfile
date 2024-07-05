@@ -1,0 +1,87 @@
+pipeline {
+    agent any
+
+    tools {
+        // Ensure Jenkins has NodeJS plugin installed and configured with this ID
+        nodejs 'node_20_7_0'
+    }
+    
+    environment {
+        // Set environment variables as needed, for example
+        DOCKER_IMAGE = 'rawarebwar/react-vite'
+    }
+
+    stages {
+        stage('Checkout code') {
+            steps {
+                // Checkout the code from GitHub
+                git branch: 'main', url: 'https://github.com/SahandMohammed/vite-project'
+            }
+        }
+
+        stage('Install dependencies') {
+            steps {
+                // Assuming you're working in the root or specify the directory if needed
+                bat 'npm install'
+            }
+        }
+        
+        stage('Build') {
+            steps {
+                // Assuming the build command is run from the root or specify the directory if needed
+                bat 'npm run build'
+            }
+        }
+
+        stage('Performance Test with JMeter') {
+            steps {
+                script {
+                    // Use Windows-style paths and store results in the workspace directory
+                    bat "C:\\apache-jmeter-5.6.3\\bin\\jmeter -n -t C:\\apache-jmeter-5.6.3\\bin\\examples\\CSVSample.jmx -l ${env.WORKSPACE}\\results\\results.jtl"
+                }
+                // Archive the JMeter results
+                archiveArtifacts artifacts: 'results/results.jtl'
+            }
+        }
+        
+        stage('Publish JMeter Results') {
+            steps {
+                script {
+                    // Publish the JMeter performance test results
+                    perfReport sourceDataFiles: 'results/results.jtl'
+                }
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    // Build a Docker image, ensure the Dockerfile is at the specified location
+                    bat "docker build -t ${env.DOCKER_IMAGE}:latest ."
+                }
+            }
+        }
+
+        stage('Push to Docker Hub') {
+            steps {
+                script {
+                    // Login to Docker Hub and push the image
+                    bat "echo %DOCKER_PWD% | docker login -u rawarebwar -p RawaSlemani1990"
+                    bat "docker push ${env.DOCKER_IMAGE}:latest"
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Build and Deployment Successful!'
+            // Additional Jira interaction after successful build
+            
+        }
+        failure {
+            echo 'Build or Deployment Failed.'
+            // Update Jira issue in case of failure
+        }
+    }
+}
